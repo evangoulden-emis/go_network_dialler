@@ -1,0 +1,51 @@
+﻿Network Requirements Version 1.0.0,,,,,
+Destination IP(s),IP Port,Service,Destination URL(s),URL Port,Service
+10.207.118.238,443,PSC Data Streaming,RxClients.spine.emis.thirdparty.nhs.uk,443,Broker Connectivity
+10.207.117.216,443,GPRV Live (New customers),rxstream.spine.emis.thirdparty.nhs.uk,443,PSC Data Streaming
+185.13.72.165,443,AA to confirm,central.spine.emis.thirdparty.nhs.uk,443,Med Manager Live (New customers)
+198.58.119.94,443,EPS Connectivity,mig.spine.emis.thirdparty.nhs.uk,443,GPRV Live (New customers)
+89.151.126.187,443,Software updates,cpesb.emishealth.com,443,AA to confirm
+185.13.72.166,443,Software updates,cpcentralreports.emishealth.com,443,Central Reporting (All Customers – certificate required) Requires Certificate to be installed on device
+54.171.166.217,443,Remote Support & Asset Management,pscms.emisnet.com,443,PSC Licence Service
+54.154.123.55,443,Remote Support & Asset Management,ws.ondemand.qas.com,443,AA to confirm
+54.77.69.163,443,Remote Support & Asset Management,lion.serengeti.com ,443,Software updates
+52.17.242.187,443,Remote Support & Asset Management,psftp.securepharm.co.uk,443,Software updates
+54.154.76.59,443,Remote Support & Asset Management,rxmobile.e-mis.co.uk,443,MLP Live (New customers)
+52.16.205.224,443,Remote Support & Asset Management,01ws.centrastage.net,443,Remote Support & Asset Management
+54.77.247.84,443,Remote Support & Asset Management,pinotage-agent.centrastage.net,443,Remote Support & Asset Management
+52.17.157.63,443,Remote Support & Asset Management,pinotage-audit.centrastage.net,443,Remote Support & Asset Management
+54.77.122.85,443,Remote Support & Asset Management,pinotage-monitoring.centrastage.net,443,Remote Support & Asset Management
+54.77.108.71,443,Remote Support & Asset Management,update.centrastage.net,443,Remote Support & Asset Management
+52.16.135.243,443,Remote Support & Asset Management,pinotage.centrastage.net,443,Remote Support & Asset Management
+52.16.45.168,443,Remote Support & Asset Management, pinotage-realtime.centrastage.net,443,Remote Support & Asset Management
+52.16.199.216,443,Remote Support & Asset Management,01cc.centrastage.net ,443,Remote Support & Asset Management
+52.212.124.100,443,Remote Support & Asset Management,ts.centrastage.net ,443,Remote Support & Asset Management
+52.31.177.46,443,Remote Support & Asset Management,cpt.centrastage.net ,443,Remote Support & Asset Management
+52.31.57.249,443,Remote Support & Asset Management,cpt.centrastage.net.s3.amazonaws.com ,443,Remote Support & Asset Management
+54.72.80.221,443,Remote Support & Asset Management,logmein.com ,443,Remote Support 
+54.72.228.106,443,Remote Support & Asset Management,logmein.eu,443,Remote Support 
+54.77.25.238,443,Remote Support & Asset Management,logmeinrescue.eu,443,Remote Support 
+54.76.210.230,443,Remote Support & Asset Management,logmeinrescue-enterprise.com,443,Remote Support 
+54.77.1.79,443,Remote Support & Asset Management,accounts.logme.in,443,Remote Support 
+54.77.29.239,443,Remote Support & Asset Management,LogMeIn123.eu,443,Remote Support 
+54.72.134.204,443,Remote Support & Asset Management,123rescue.com,443,Remote Support 
+52.17.144.57,443,Remote Support & Asset Management,support.me,443,Remote Support 
+54.93.70.139,443,Remote Support & Asset Management,join.me,443,Remote Support 
+54.93.63.109,443,Remote Support & Asset Management,cub.by,443,Remote Support 
+52.28.143.32,443,Remote Support & Asset Management,cubby.com,443,Remote Support 
+52.28.142.189,443,Remote Support & Asset Management,cdce.lon004.internap.com,443,Remote Support 
+52.29.179.182,443,Remote Support & Asset Management,a248.e.akamai.net,443,Remote Support 
+,,Remote Support & Asset Management,a151.g.akamai.net,443,AntiVirus
+,,,e10347.dscd.akamaiedge.net,443,AntiVirus
+,,,licenseupdate.trendmicro.com,443,AntiVirus
+,,,trendmicro.com,443,AntiVirus
+,,,ns1.olbackup.co.uk,443,Offsite backups
+,,,ns10.olbackup.co.uk,443,Offsite backups
+,,,pharmacybuyer.net,80,Ordering
+,,,Ert.egton.net,443,PSC installation
+,,,videos.sproutvideo.com,443,Training
+,,,emishealth.webex.com,443,Training
+,,,24x2.com,443,24x SMS
+,,,24x.com,443,24x SMS
+,,,aql.com,443,AQL SMS
+,,,ftp.rxsystems.net,443,Log server
