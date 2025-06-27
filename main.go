@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -116,18 +115,15 @@ func dialEndpoint(ip string, port string) {
 	}
 
 }
+
 func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 	address := net.JoinHostPort(ip, port)
 
-	// Create a custom dialer with shorter timeout
-	dialer := &net.Dialer{
-		Timeout: 2 * time.Second,
-	}
-
-	// Try to establish TCP connection
-	conn, err := dialer.Dial("tcp", address)
+	conn, err := net.DialTimeout("tcp", address, time.Second*3)
 	if err != nil {
 		var message string
+
+		// More specific error checking
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			message = fmt.Sprintf("⏳ Connection timeout to %s", address)
 		} else if opErr, ok := err.(*net.OpError); ok {
@@ -147,42 +143,12 @@ func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 		} else {
 			message = fmt.Sprintf("Failed to connect to %s: %v", address, err)
 		}
+
 		results <- CheckResult{address: address, success: false, message: message}
 		return
 	}
 
 	defer conn.Close()
-
-	// Set deadline for write
-	conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
-
-	// Try to write a single byte to verify connection
-	_, err = conn.Write([]byte{0})
-	if err != nil {
-		results <- CheckResult{
-			address: address,
-			success: false,
-			message: fmt.Sprintf("🔴 Connection established but not responding at %s: %v", address, err),
-		}
-		return
-	}
-
-	// Set deadline for read
-	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-
-	// Try to read (we expect this to fail with timeout or connection reset,
-	// but it helps verify the connection)
-	buffer := make([]byte, 1)
-	_, err = conn.Read(buffer)
-	if err != nil && !strings.Contains(err.Error(), "reset by peer") && !strings.Contains(err.Error(), "i/o timeout") {
-		results <- CheckResult{
-			address: address,
-			success: false,
-			message: fmt.Sprintf("🔴 Connection unstable at %s: %v", address, err),
-		}
-		return
-	}
-
 	results <- CheckResult{
 		address: address,
 		success: true,
