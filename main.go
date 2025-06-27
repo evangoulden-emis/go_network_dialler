@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -43,26 +44,26 @@ func main() {
 	results := make(chan CheckResult)
 	var wg sync.WaitGroup
 
-	for i, record := range records[1:] { // Skip header row
+	for _, record := range records[1:] { // Skip header row
 
 		destIp := record[0]
 		port := record[1]
 
 		// Skip if IP or port is empty
-		if destIp == "" {
-			fmt.Printf("⚠️ Skipping record %d due to missing IP", i+1)
-			continue
-		} else if parseIpAddress(destIp) == false {
-			fmt.Printf("⚠️ Skipping record %d due to invalid IP: %s\n", i+1, destIp)
-			continue
-		}
+		//if destIp == "" {
+		//	fmt.Printf("⚠️ Skipping record %d due to missing IP", i+1)
+		//	continue
+		//} else if parseEndpoint(destIp) == false {
+		//	fmt.Printf("⚠️ Skipping record %d due to invalid IP: %s\n", i+1, destIp)
+		//	continue
+		//}
 		if port == "" {
 			port = "443"
 		}
 		wg.Add(1)
 		go func(ip, port string) {
 			defer wg.Done()
-			dialEndpointAsync(ip, port, results)
+			processTarget(ip, port, results)
 		}(destIp, port)
 
 	}
@@ -78,7 +79,7 @@ func main() {
 	}
 }
 
-func parseIpAddress(ip string) bool {
+func parseEndpoint(ip string) bool {
 	_, err := netip.ParseAddr(ip)
 	if err != nil {
 		return false
@@ -88,7 +89,7 @@ func parseIpAddress(ip string) bool {
 
 func dialEndpoint(ip string, port string) {
 	address := net.JoinHostPort(ip, port)
-	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+	conn, err := net.DialTimeout("tcp4", address, 3*time.Second)
 
 	if err != nil {
 		switch {
@@ -154,4 +155,80 @@ func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 		success: true,
 		message: fmt.Sprintf("✅ Connected to %s", address),
 	}
+}
+
+// expandTarget processes a target (IP, CIDR, or FQDN) and returns a list of IPs to check
+func expandTarget(target string) ([]string, error) {
+	// Check if it's a CIDR range
+	if strings.Contains(target, "/") {
+		return expandCIDR(target)
+	}
+
+	// Try to parse as IP address
+	if ip := net.ParseIP(target); ip != nil {
+		return []string{target}, nil
+	}
+
+	// Assume it's a FQDN, try to resolve it
+	ips, err := net.LookupHost(target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve %s: %v", target, err)
+	}
+	return ips, nil
+}
+
+// expandCIDR takes a CIDR range and returns all IP addresses in that range
+func expandCIDR(cidr string) ([]string, error) {
+	ip, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CIDR range %s: %v", cidr, err)
+	}
+
+	var ips []string
+	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); incrementIP(ip) {
+		ips = append(ips, ip.String())
+	}
+
+	// Remove network address and broadcast address for IPv4
+	if len(ips) > 2 && !strings.Contains(cidr, "::") {
+		ips = ips[1 : len(ips)-1]
+	}
+
+	return ips, nil
+}
+
+// incrementIP increments an IP address by 1
+func incrementIP(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
+}
+
+// Modified main processing function
+func processTarget(target string, port string, results chan<- CheckResult) {
+	ips, err := expandTarget(target)
+	if err != nil {
+		results <- CheckResult{
+			address: fmt.Sprintf("%s:%s", target, port),
+			success: false,
+			message: fmt.Sprintf("❌ Failed to process target %s: %v", target, err),
+		}
+		return
+	}
+
+	// Create a WaitGroup for all the IP checks
+	var wg sync.WaitGroup
+	for _, ip := range ips {
+		wg.Add(1)
+		go func(ip string) {
+			defer wg.Done()
+			dialEndpointAsync(ip, port, results)
+		}(ip)
+	}
+
+	// Wait for all checks to complete
+	wg.Wait()
 }
