@@ -2,13 +2,26 @@ package main
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/netip"
 	"os"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 )
 
+type CheckResult struct {
+	address string
+	success bool
+	message string
+}
+
 func main() {
-	fileName := "Network Checklist - v1.csv"
+	fileName := "data.csv"
 	file, err := os.Open(fileName)
 	if err != nil {
 		log.Println("Failed to open file: ", fileName)
@@ -28,28 +41,151 @@ func main() {
 		log.Fatal(err)
 	}
 
-	for i, record := range records {
+	results := make(chan CheckResult)
+	var wg sync.WaitGroup
+
+	for i, record := range records[1:] { // Skip header row
 
 		destIp := record[0]
 		port := record[1]
-		serviceDescription := record[2]
-		destinationUrl := record[3]
-		urlPort := record[4]
-		service := record[5]
 
 		// Skip if IP or port is empty
-		if destIp == "" || port == "" {
-			fmt.Printf("⚠️ Skipping record %d due to missing IP or port\n", i+1)
+		if destIp == "" {
+			fmt.Printf("⚠️ Skipping record %d due to missing IP", i+1)
 			continue
-		} else {
-
+		} else if parseIpAddress(destIp) == false {
+			fmt.Printf("⚠️ Skipping record %d due to invalid IP: %s\n", i+1, destIp)
+			continue
 		}
+		if port == "" {
+			port = "443"
+		}
+		wg.Add(1)
+		go func(ip, port string) {
+			defer wg.Done()
+			dialEndpointAsync(ip, port, results)
+		}(destIp, port)
 
-		fmt.Println(i, destIp, port, serviceDescription, destinationUrl, urlPort, service)
+	}
+	// Launch a goroutine to close results channel after all checks complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
+	// Collect and print results as they come in
+	for result := range results {
+		fmt.Println(result.message)
 	}
 }
 
-func dialEndpoint(ip string, port string) bool {
+func parseIpAddress(ip string) bool {
+	_, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	return true
+}
 
+func dialEndpoint(ip string, port string) {
+	address := net.JoinHostPort(ip, port)
+	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, os.ErrDeadlineExceeded):
+			fmt.Printf("⏳ Connection timeout to %s\n", address)
+		case errors.Is(err, syscall.ECONNREFUSED):
+			fmt.Printf("🛑 Connection refused to %s\n", address)
+		case errors.Is(err, syscall.ENETUNREACH):
+			fmt.Printf("🤷🏼‍♂️ Network unreachable for %s\n", address)
+		default:
+			// Handle other types of errors
+			fmt.Printf("Failed to connect to %s: %v\n", address, err)
+
+		}
+
+	} else {
+		fmt.Printf("✅ Connected to %s\n", address)
+		defer func(conn net.Conn) {
+			err := conn.Close()
+			if err != nil {
+				fmt.Println("Failed to close the connection cleanly: ", err)
+			}
+		}(conn)
+	}
+
+}
+func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
+	address := net.JoinHostPort(ip, port)
+
+	// Create a custom dialer with shorter timeout
+	dialer := &net.Dialer{
+		Timeout: 2 * time.Second,
+	}
+
+	// Try to establish TCP connection
+	conn, err := dialer.Dial("tcp", address)
+	if err != nil {
+		var message string
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			message = fmt.Sprintf("⏳ Connection timeout to %s", address)
+		} else if opErr, ok := err.(*net.OpError); ok {
+			if opErr.Timeout() {
+				message = fmt.Sprintf("⏳ Connection timeout to %s", address)
+			} else if syscallErr, ok := opErr.Err.(*os.SyscallError); ok {
+				if syscallErr.Err == syscall.ECONNREFUSED {
+					message = fmt.Sprintf("🛑 Connection refused to %s", address)
+				} else if syscallErr.Err == syscall.ENETUNREACH {
+					message = fmt.Sprintf("🤷🏼‍♂️ Network unreachable for %s", address)
+				} else {
+					message = fmt.Sprintf("System error for %s: %v", address, syscallErr.Err)
+				}
+			} else {
+				message = fmt.Sprintf("Operation error for %s: %v", address, opErr.Err)
+			}
+		} else {
+			message = fmt.Sprintf("Failed to connect to %s: %v", address, err)
+		}
+		results <- CheckResult{address: address, success: false, message: message}
+		return
+	}
+
+	defer conn.Close()
+
+	// Set deadline for write
+	conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+
+	// Try to write a single byte to verify connection
+	_, err = conn.Write([]byte{0})
+	if err != nil {
+		results <- CheckResult{
+			address: address,
+			success: false,
+			message: fmt.Sprintf("🔴 Connection established but not responding at %s: %v", address, err),
+		}
+		return
+	}
+
+	// Set deadline for read
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+
+	// Try to read (we expect this to fail with timeout or connection reset,
+	// but it helps verify the connection)
+	buffer := make([]byte, 1)
+	_, err = conn.Read(buffer)
+	if err != nil && !strings.Contains(err.Error(), "reset by peer") && !strings.Contains(err.Error(), "i/o timeout") {
+		results <- CheckResult{
+			address: address,
+			success: false,
+			message: fmt.Sprintf("🔴 Connection unstable at %s: %v", address, err),
+		}
+		return
+	}
+
+	results <- CheckResult{
+		address: address,
+		success: true,
+		message: fmt.Sprintf("✅ Connected to %s", address),
+	}
 }
