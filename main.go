@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/netip"
 	"os"
 	"strings"
 	"sync"
@@ -82,14 +81,6 @@ func main() {
 	}
 }
 
-func parseEndpoint(ip string) bool {
-	_, err := netip.ParseAddr(ip)
-	if err != nil {
-		return false
-	}
-	return true
-}
-
 func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 	address := net.JoinHostPort(ip, port)
 	isIPv6 := strings.Contains(ip, ":")
@@ -130,7 +121,12 @@ func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 		return
 	}
 
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			log.Printf("Failed to close connection to %s: %v", address, err)
+		}
+	}(conn)
 	results <- CheckResult{
 		address: address,
 		success: true,
