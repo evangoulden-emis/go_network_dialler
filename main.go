@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -89,38 +88,6 @@ func parseEndpoint(ip string) bool {
 		return false
 	}
 	return true
-}
-
-func dialEndpoint(ip string, port string) {
-	address := net.JoinHostPort(ip, port)
-	// Check if it's an IPv6 address'
-
-	conn, err := net.DialTimeout("tcp4", address, 3*time.Second)
-
-	if err != nil {
-		switch {
-		case errors.Is(err, os.ErrDeadlineExceeded):
-			fmt.Printf("⏳ Connection timeout to %s\n", address)
-		case errors.Is(err, syscall.ECONNREFUSED):
-			fmt.Printf("🛑 Connection refused to %s\n", address)
-		case errors.Is(err, syscall.ENETUNREACH):
-			fmt.Printf("🤷🏼‍♂️ Network unreachable for %s\n", address)
-		default:
-			// Handle other types of errors
-			fmt.Printf("Failed to connect to %s: %v\n", address, err)
-
-		}
-
-	} else {
-		fmt.Printf("✅ Connected to %s\n", address)
-		defer func(conn net.Conn) {
-			err := conn.Close()
-			if err != nil {
-				fmt.Println("Failed to close the connection cleanly: ", err)
-			}
-		}(conn)
-	}
-
 }
 
 func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
