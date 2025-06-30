@@ -49,22 +49,26 @@ func main() {
 		destIp := record[0]
 		port := record[1]
 
-		// Skip if IP or port is empty
-		//if destIp == "" {
-		//	fmt.Printf("⚠️ Skipping record %d due to missing IP", i+1)
-		//	continue
-		//} else if parseEndpoint(destIp) == false {
-		//	fmt.Printf("⚠️ Skipping record %d due to invalid IP: %s\n", i+1, destIp)
-		//	continue
-		//}
 		if port == "" {
 			port = "443"
 		}
-		wg.Add(1)
-		go func(ip, port string) {
-			defer wg.Done()
-			processTarget(ip, port, results)
-		}(destIp, port)
+		var portRange []string
+		if strings.Contains(port, "-") {
+			portRange = strings.Split(port, "-")
+			for _, p := range portRange {
+				wg.Add(1)
+				go func(ip, port string) {
+					defer wg.Done()
+					processTarget(ip, p, results)
+				}(destIp, port)
+			}
+		} else {
+			wg.Add(1)
+			go func(ip, port string) {
+				defer wg.Done()
+				processTarget(ip, port, results)
+			}(destIp, port)
+		}
 
 	}
 	// Launch a goroutine to close results channel after all checks complete
@@ -89,6 +93,8 @@ func parseEndpoint(ip string) bool {
 
 func dialEndpoint(ip string, port string) {
 	address := net.JoinHostPort(ip, port)
+	// Check if it's an IPv6 address'
+
 	conn, err := net.DialTimeout("tcp4", address, 3*time.Second)
 
 	if err != nil {
@@ -119,8 +125,16 @@ func dialEndpoint(ip string, port string) {
 
 func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 	address := net.JoinHostPort(ip, port)
+	isIPv6 := strings.Contains(ip, ":")
 
-	conn, err := net.DialTimeout("tcp", address, time.Second*3)
+	var dialNetwork string
+	if isIPv6 {
+		dialNetwork = "tcp6"
+	} else {
+		dialNetwork = "tcp4"
+	}
+
+	conn, err := net.DialTimeout(dialNetwork, address, time.Second*3)
 	if err != nil {
 		var message string
 
@@ -155,6 +169,7 @@ func dialEndpointAsync(ip string, port string, results chan<- CheckResult) {
 		success: true,
 		message: fmt.Sprintf("✅ Connected to %s", address),
 	}
+
 }
 
 // expandTarget processes a target (IP, CIDR, or FQDN) and returns a list of IPs to check
